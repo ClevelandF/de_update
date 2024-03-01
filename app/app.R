@@ -50,10 +50,11 @@ ui <- (navbarPage(
       sidebarPanel(
         #For selecting the tax year from a given HES/EFU combination
         "Select Tax Year:",
-        selectInput(
+        pickerInput(
           inputId ="chosen_file", 
           label = NULL, 
-          choices = data_versions),
+          choices = data_versions,
+          selected = data_versions[1]),
         
         # For selecting the population type, HH or Fam
         "Select Population Unit:",
@@ -153,7 +154,7 @@ ui <- (navbarPage(
           inputId = "pairPlot",
           label = NULL, 
           value = FALSE,
-          status = "success")
+          status = "primary")
       ),
       
       mainPanel(
@@ -378,12 +379,12 @@ server <- function(input, output, session) {
 
       }
       else if(input$plotType == "linePlot") {
-        p = p + geom_line(group = 1, color = "#56B4E9")
+        p = p + geom_line(group = 1, color = "#56B4E9") + theme(legend.position = "none")
         p = p + geom_point(group = 1, color = "black", fill = "#56B4E9")
 
       }
       else if(input$plotType == "smoothPlot") {
-        p = p + geom_smooth(colour = "#56B4E9", aes(group = Description), se = FALSE, span = 0.5)
+        p = p + geom_smooth(colour = "#56B4E9", aes(group = Description), se = FALSE, span = 0.5) + theme(legend.position = "none")
 
       }
     } else {
@@ -469,12 +470,12 @@ server <- function(input, output, session) {
 
       }
       else if(input$plotType == "linePlot") {
-        p = p + geom_line(group = 1, color = "#56B4E9")
+        p = p + geom_line(group = 1, color = "#56B4E9") + theme(legend.position = "none")
         p = p + geom_point(group = 1, color = "black", fill = "#56B4E9")
 
       }
       else if(input$plotType == "smoothPlot") {
-        p = p + geom_smooth(colour = "#56B4E9", aes(group = Description), se = FALSE, span = 0.5)
+        p = p + geom_smooth(colour = "#56B4E9", aes(group = Description), se = FALSE, span = 0.5) + theme(legend.position = "none")
 
       }
     } else {
