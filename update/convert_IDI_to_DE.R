@@ -4,27 +4,30 @@
 library(data.table)
 library(openxlsx)
 
-#change to appropriate filename
-filename <- "update/DistExpl_HES20_TY20_HYEFU21.xlsx"
-
-
-##to be updated to read from standard DE IDI output
+#update to match new data
 
 #format: YY
-hes <- "20"
+hes <- "21"
 
 #e.g. "HYEFU21"
 efu <- "HYEFU21"
 
+#format YYYY-MM-DD
+gen_date <- "2024-02-29"
+
 #format: YY
-year <- "20"
+years <- c("25", "26", "27", "28")
 
-#open file, load descriptors and values and merge into single datatable
-wb <- openxlsx::loadWorkbook(filename)
-descriptors <- data.table(openxlsx::read.xlsx(wb, sheet = "Descriptors"))
-values <- data.table(openxlsx::read.xlsx(wb, sheet = "Values"))
-output <- merge(descriptors, values, by = "Index")
+for (year in years) {
 
-#write new data version to data folder
-fwrite(output, paste0("app/data/DE_HES", hes, "_", efu, "_TY", year, ".csv"))
+  #open file, load descriptors and values and merge into single data.table
+  filename <- paste0("update/DE_results_HES", hes, "_", efu, "_TY", year, "_", gen_date, "_no_raw_info.xlsx")
+  wb <- openxlsx::loadWorkbook(filename)
+  descriptors <- data.table(openxlsx::read.xlsx(wb, sheet = "Descriptors"))
+  values <- data.table(openxlsx::read.xlsx(wb, sheet = "Values"))
+  output <- merge(descriptors, values, by = "Index")
+  
+  #write new data version to data folder
+  fwrite(output, paste0("app/data/DE_HES", hes, "_", efu, "_TY", year, ".csv"))
 
+}

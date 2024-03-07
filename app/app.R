@@ -32,7 +32,7 @@ groupsFam = c(
   "FTC", "IWTC", "NZ Super", "WEP", "WFF")
 
 # Color blind palette for plotting
-cbPalette <- c("#56B4E9", "#E69F00",  "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7", "#000000")
+cbPalette <- c("#00718f", "#E69F00",  "#009E73", "#F0E442", "#56B4E9", "#D55E00", "#CC79A7", "#000000")
 
 ui <- (navbarPage(
   "Income Distribution Explorer",
@@ -49,11 +49,17 @@ ui <- (navbarPage(
     sidebarLayout(
       sidebarPanel(
         #For selecting the tax year from a given HES/EFU combination
-        "Select Tax Year:",
-        selectInput(
+        "Select Tax Year(s):",
+        pickerInput(
           inputId ="chosen_file", 
           label = NULL, 
-          choices = data_versions),
+          choices = data_versions,
+          selected = data_versions[1],
+          multiple = TRUE,
+          options = list(size = 5, 
+                         `live-search` = TRUE,
+                         "max-options" = 8)
+          ),
         
         # For selecting the population type, HH or Fam
         "Select Population Unit:",
@@ -71,15 +77,15 @@ ui <- (navbarPage(
         
         # When households is selected
         conditionalPanel(
-          condition = "input.populationType == 'Household'",
-          "Select Population Subgroups:",
+          condition = "input.populationType == 'Household' && input.chosen_file.length == 1",
+          "Select Population Subgroup(s):",
           tooltip(
             bsicons::bs_icon("question-circle"),
             "Household is in a subgroup when at least one individual in the household is: of selected age | in slected family type | receiving selected benefit",
             placement = "right"
           ),
           pickerInput(
-            inputId = "show_groups",
+            inputId = "show_groups_HH",
             label = NULL,
             choices = groupsHH,
             selected = groupsHH[1],
@@ -90,15 +96,15 @@ ui <- (navbarPage(
         
         # When family is selected
         conditionalPanel(
-          condition = "input.populationType == 'Family'",
-          "Select Population Subgroups:",
+          condition = "input.populationType == 'Family' && input.chosen_file.length == 1",
+          "Select Population Subgroup(s):",
           tooltip(
             bsicons::bs_icon("question-circle"),
             "Family is in a subgroup when at least one individual in the family is: of selected age | in slected family type | receiving selected benefit",
             placement = "right"
           ),
           pickerInput(
-            inputId = "show_groups2",
+            inputId = "show_groups_Fam",
             label = NULL,         
             choices = groupsFam,
             selected = groupsFam[1],
@@ -109,7 +115,46 @@ ui <- (navbarPage(
 
           ),
         
-
+        #disable multiple selection when multiple years selected
+        
+        # When households is selected
+        conditionalPanel(
+          condition = "input.populationType == 'Household' && input.chosen_file.length > 1",
+          "Select Population Subgroup:",
+          tooltip(
+            bsicons::bs_icon("question-circle"),
+            "Household is in a subgroup when at least one individual in the household is: of selected age | in slected family type | receiving selected benefit",
+            placement = "right"
+          ),
+          pickerInput(
+            inputId = "show_groups_HH_multi",
+            label = NULL,
+            choices = groupsHH,
+            selected = groupsHH[1],
+            options = list(size = 5, 
+                           `live-search` = TRUE)),
+          p(em("*When multiple years are selected only a single subgroup can be chosen."), style = "margin-top: -10px; margin-bottom: 7px;")
+        ),
+        
+        # When family is selected
+        conditionalPanel(
+          condition = "input.populationType == 'Family' && input.chosen_file.length > 1",
+          "Select Population Subgroup:",
+          tooltip(
+            bsicons::bs_icon("question-circle"),
+            "Family is in a subgroup when at least one individual in the family is: of selected age | in slected family type | receiving selected benefit",
+            placement = "right"
+          ),
+          pickerInput(
+            inputId = "show_groups_Fam_multi",
+            label = NULL,         
+            choices = groupsFam,
+            selected = groupsFam[1],
+            options = list(size = 5, 
+                           `live-search` = TRUE)),
+          p(em("*When multiple years are selected only a single subgroup can be chosen."), style = "margin-top: -10px; margin-bottom: 7px;"),
+          
+        ),
         
         # To select income sort
         conditionalPanel(
@@ -178,17 +223,38 @@ ui <- (navbarPage(
           inputId = "pairPlot",
           label = NULL, 
           value = FALSE,
-          status = "success")
+          status = "primary"),
+        
+        conditionalPanel(
+          condition = "input.chosen_file.length > 1",
+          textOutput("normalised_text", inline = TRUE),
+          tooltip(
+            bsicons::bs_icon("question-circle"),
+            "Scales populations down to lowest population year, accounts for population growth",
+            placement = "right"
+          ),
+          materialSwitch(
+            inputId = "normalised",
+            label = NULL, 
+            value = FALSE,
+            status = "primary"),
+        )
       ),
       
       mainPanel(
         tabsetPanel(
           tabPanel(
             "Plots",
-            br(),
             plotlyOutput("ventilePlot"),
-            br(),
+            conditionalPanel(
+              condition = "input.pairPlot == 1",
+              p("Ventiles", align = "center",style = "color:black; margin-top: -5px; margin-bottom: -5px")
+            ),
             plotlyOutput("incomeBandPlot"),
+            conditionalPanel(
+              condition = "input.pairPlot == 1",
+              p("Income Bands", align = "center",style = "color:black; margin-top: -5px; margin-bottom: -5px")
+            ),
             br()
           ),
           tabPanel(
@@ -229,20 +295,20 @@ ui <- (navbarPage(
            column(10,
            h5(strong("Overview")),
            p("The income distribution explorer is a tool which can be used to understand income distribution for households and families in New Zealand."),
-           p("The tool allows users to explore and compare the income distribution for subgroups of interest, for example households with individuals aged over 65, households with (and without) children, and households in receipt of different welfare payments."),
+           p("The tool allows users to explore the income distribution for population subgroups, as well as compare income distributions for a subgroup over time or with other subgroups. The population can be sorted into subgroups based on the age of, household/family structure of, or benefit recieved by individuals in the household or family."),
            h5(strong("Instructions")),
            p(strong(" 1)"), "Maximise window to full screen."),
-           p(strong(" 2)"), "Select the input data from the excel file provided using the Browse... button."),
+           p(strong(" 2)"), "Select Tax Years: using the drop down menu, choose the desired tax year or years. There may be mulitple data sources available for a single tax year."),
            p(strong(" 3)"), "Select Population Unit: either Households or Families."),
-           p(strong(" 4)"), "Select Population Subgroups using the drop down menu, for example, Couple with children and Couple without children. We suggest that no more than 4 subgroups are selected otherwise the plots become difficult to interpret."),
-           #p(strong(" 5)"), "Select the Income type: either Equivalised Disposable Income, Taxable Income, Disposable Income or Total Income."),
-           p(strong(" 5)"), "Select the Income type: either Equivalised Disposable Income, Taxable Income, or Disposable Income."),
+           p(strong(" 4)"), "Select Population Subgroups: Using the drop down menu, select the desired population subgroups. When multiple years are selected, then only a single subgroup can be selected. The all households/families captures the entire population. Up to 8 subgroups can be selected at a time, however we suggest that no more than 4 subgroups are selected otherwise the plots become difficult to interpret."),
+           p(strong(" 5)"), "Select the Income type: either Equivalised Disposable Income, Taxable Income, or Disposable Income.  When the selected population unit is households, After Housing Cost Disposable income can be selected."),
            p(strong(" 6)"), "Select Plot Type: either Histogram, Line Plot or Smooth Line Plot."),
            p(strong(" 7)"), "Choose if you would like plots displayed as a Pair Plot. This is useful when multiple subgroups are selected."),
+           p(strong(" 8)"), "If looking at multiple years, choose if you would like to normalise population values by the lowest population year (as determined by household population)."),
            
            p(strong("Income Distribution Plots")),
            p("This tab displays the income distribution for the subgroups and income measure selected by ventiles and fixed income bands. See Definitions for more detail on the income boundaries used in this tool."),
-           p("To download a plot, hover the mouse over the plot which will cause several icons to appear in the top right corner of the plot. Click on the little camera icon to download a plot."),
+           p("To download a plot, hover the mouse over the plot which will cause several icons to appear in the top right corner of the plot. Click on the camera icon to download a plot. Note that in pair plot mode, the x-axis title is located outside of the plot and thus will not be downloaded."),
            
            p(strong("Income Distribution Tables")),
            p("This tab displays the data which is used to create the ventile and income band plots. A Download Data button is available to save the data as a CSV file."),
@@ -267,11 +333,10 @@ ui <- (navbarPage(
            
            p(strong("Taxable income: "),"the sum of all core benefits (JSS, SLP, SPS), superannuation, student allowance, other taxable benefits, wage and salary income, redundancy income, self-employment income and other taxable income",strong("before"),"tax and any other deductions are removed. Note that negative income amounts are included when calculating taxable income though total taxable income is defined as greater than or equal to zero."),
            
-           # p(strong("Total income: "),"is the sum of taxable income (see above), abated accommodation supplement, winter energy payment, other non-taxable benefits, non-taxable income, and working for family tax credits. Note working for family tax credits include FTC, IWTC, MFTC, PTC, Best Start and IETC."),           # p(strong("Total income: "),"is the sum of taxable income (see above), abated accommodation supplement, winter energy payment, other non-taxable benefits, non-taxable income, and working for family tax credits. Note working for family tax credits include FTC, IWTC, MFTC, PTC, Best Start and IETC."),
-           # 
-           # p(strong("Disposable income: "), "total income less tax and other deductions such as the ACC levy. Note negative incomes are included."),
-           
            p(strong("Disposable income: "), "total income less tax and other deductions such as the ACC levy. Here, total income is the sum of taxable income (see above), abated accommodation supplement, winter energy payment, other non-taxable benefits, non-taxable income, and working for family tax credits. Note negative incomes are included."),
+           
+           p(strong("After Housing Cost Disposable income: "), "disposable income less housing costs. Only available for households as housing costs are reported at the household level."),
+           
            
            br(),
            
@@ -312,7 +377,7 @@ ui <- (navbarPage(
            
            h5(strong("Other")),
            p(strong("Fixed income bands: "), "household / families are assigned an income band based on the income selected, e.g. disposable income. Each income band is of equal width (except for the  first and last income band) and has a different population size."),
-           p(strong("Ventiles: "), "the overall household (or family) population is separated into 20 equal groups based on the income selected, e.g. disposable income. The corresponding income bands (not currently provided) will be of different sizes with thinner income bands where the population is larger and wider income bands where the population is not as smaller.")
+           p(strong("Ventiles: "), "the overall household (or family) population is separated into 20 equal groups based on the income selected, e.g. disposable income. The corresponding income bands (not currently provided) will be of different sizes with thinner income bands where the population is larger and wider income bands where the population is lower")
              ),
              column(1)
            )
@@ -323,35 +388,32 @@ ui <- (navbarPage(
 
 
 server <- function(input, output, session) {
-  dataUpload = reactive({
-    dt_frame = as.data.table(read.csv(paste0("data/", input$chosen_file)))
-    dt_frame[Description=="Aged 0-16", Description:="Aged 0-15"]
-    dt_frame[Description=="Super annuation", Description:="NZ Super"]
-    dt_frame[Description=="Multiple families tax credits", Description:="MFTC"]
-    dt_frame[Description=="Accomodation supplement", Description:="Accommodation supplement"]
-    dt_frame[Description=="Family tax credits", Description:="FTC"]
-    dt_frame[Description=="In work tax credits", Description:="IWTC"]
-    dt_frame[Description=="Working for families", Description:="WFF"]
-    dt_frame[Description=="Winter energy payment", Description:="WEP"]
-    return(dt_frame)
-  })
-
-  
-  data_hes = reactive({
-    hes <- get_hes(input$chosen_file)
-    return(hes)
-  })
-
-  data_efu = reactive({
-    efu <- get_efu(input$chosen_file)
-    return(efu)
-  })
 
   data_year = reactive({
-    year <- get_year(input$chosen_file)
-    return(year)
+    year_list <- NULL
+    for (file in input$chosen_file) {
+      year_list <- c(year_list, get_year(file))
+    }
+    return(year_list)
+  })
+
+
+  data_version = reactive({
+    version_list <- NULL
+    for (file in input$chosen_file) {
+      version_list <- c(version_list, paste0(get_hes(file), ", ", get_efu(file)))
+    }
+    return(version_list)
   })
   
+  data_version_full = reactive({
+    full_version_list <- NULL
+    for (file in input$chosen_file) {
+      full_version_list <- c(full_version_list, paste0("20", get_year(file), " (", get_hes(file), ", ", get_efu(file), ")"))
+    }
+    return(full_version_list)
+  })
+
   income_sort = reactive({
     if (input$populationType == "Household") {
       return(input$incomeSortHH)
@@ -359,39 +421,110 @@ server <- function(input, output, session) {
     else {
       return(input$incomeSortFam)
     }
+  })
+  
+  show_groups = reactive({
+    if (input$populationType == "Household") {
+      if(length(input$chosen_file) > 1) {
+        return(input$show_groups_HH_multi)
+      }
+      else {
+        return(input$show_groups_HH)
+      }
+    }
+    else {
+      if(length(input$chosen_file) > 1) {
+        return(input$show_groups_Fam_multi)
+      }
+      else {
+        return(input$show_groups_Fam)
+      }
+    }
   })  
-
+  
+  dataUpload = reactive({
+    dt <- NULL
+    for (file in input$chosen_file) {
+      dt_year = as.data.table(read.csv(paste0("data/", file)))
+      dt_year[Description=="Aged 0-16", Description:="Aged 0-15"]
+      dt_year[Description=="Super annuation", Description:="NZ Super"]
+      dt_year[Description=="Multiple families tax credits", Description:="MFTC"]
+      dt_year[Description=="Accomodation supplement", Description:="Accommodation supplement"]
+      dt_year[Description=="Family tax credits", Description:="FTC"]
+      dt_year[Description=="In work tax credits", Description:="IWTC"]
+      dt_year[Description=="Working for families", Description:="WFF"]
+      dt_year[Description=="Winter energy payment", Description:="WEP"]
+      dt_year[, data_version := paste0(get_hes(file), ", ", get_efu(file))]
+      dt_year[, year := paste0("20", get_year(file))]
+      dt_year[, file := paste0("20", get_year(file), " (", get_hes(file), ", ", get_efu(file), ")")]
+      if (is.null(dt)) {
+        dt <- dt_year
+      }
+      else {
+        dt <- rbindlist((list(dt, dt_year)))
+      }
+    }
+    dt <- norm_pop(dt)[[2]]
+    return(dt)
+  })
+  
+  
+  output$normalised_text <- renderText(paste0("Normalise populations to ", norm_pop(dataUpload())[[1]], ":"))
+  
   ###############################
   #Ventile plot
   ###############################
   output$ventilePlot = renderPlotly({
-
-
-
-    dataset= copy(dataUpload())
-
-    dataset = dataset[Population=="S", Population := 0L]
-    dataset = dataset[,Population := as.numeric(Population)]
-
-    if(length(input$show_groups) > 8){
+    
+    if(length(show_groups()) > 8){
       stop("Maximum selection is 8 population subgroups")
       return(NULL)
     }
-
-    if (input$populationType == 'Household'){
-      ventiles = dataset[Income.Type == "Income Quantiles" & Population.Type == input$populationType & Description %in% input$show_groups
-                         & Income.Measure == income_sort()]
+    
+    if(length(input$chosen_file) > 8){
+      stop("Maximum selection is 8 years")
+      return(NULL)
     }
-
-
-    if (input$populationType == 'Family'){
-      ventiles = dataset[Income.Type == "Income Quantiles" & Population.Type == input$populationType & Description %in% input$show_groups2
-                         & Income.Measure == income_sort()]
+    
+    if(length(input$chosen_file) > 1){
+      fill <- "file"
+      label <- "Years"
+      subtitle <- str_to_title(show_groups())
     }
+    else {
+      fill <- "Description"
+      label <- "Subgroups"
+      subtitle <- paste0("Tax Year 20", data_year(), " from ", data_version())
+    }
+    
+    if(input$pairPlot) {
+      x_label <- NULL
+    }
+    else {
+      x_label <- "Ventiles"
+    }
+    
+    dataset= copy(dataUpload())
+    
+    if(input$normalised) {
+      pop_type <- "Normalised"
+      dataset = dataset[Normalised=="S", Normalised := 0L]
+      dataset = dataset[,Normalised := as.numeric(Normalised)]
+      y_label <- "Normalised Population"
+    }
+    else {
+      pop_type <- "Population"
+      dataset = dataset[Population=="S", Population := 0L]
+      dataset = dataset[,Population := as.numeric(Population)]
+      y_label <- "Population"
+    }
+    
+    ventiles = dataset[Income.Type == "Income Quantiles" & Population.Type == input$populationType & Description %in% show_groups()
+                       & Income.Measure == income_sort()]
 
-    p = ggplot(ventiles, aes(x = as.numeric(Income.Group), y = Population, fill = Description)) +
-      labs(title = paste0(str_to_title(paste("Population Distribution By", input$populationType, income_sort(), "Ventiles", sep = " ")), "\nTax Year 20", data_year(), " from ", data_hes(), " and ", data_efu()),
-           x = "Ventiles", y = "Population") +
+    p = ggplot(ventiles, aes(x = as.numeric(Income.Group), y = get(pop_type), fill = get(fill))) +
+      labs(title = paste0(str_to_title(paste("Population Distribution By", input$populationType, income_sort(), "Ventiles", sep = " ")), "\n", subtitle),
+           x = x_label, y = y_label) +
       scale_x_continuous(breaks = seq(1:20)) +
       scale_y_continuous(labels = comma,limits = c(0, NA),
                          expand = expansion(mult = c(0, 0.05))) +  # Includes 0 in y axis and has the top of graph 5% above the max value
@@ -400,42 +533,46 @@ server <- function(input, output, session) {
             axis.text.x = element_text(size = 8),
             axis.text.y = element_text(size = 8),
             axis.title = element_text(size = 10),
-            legend.title.align = 0.5)
+            legend.title.align = 0.5,
+            plot.margin = margin(t = 40),
+            strip.background =element_rect(fill="#00718f", color = "#00718f"),
+            strip.text = element_text(colour = 'white'))
 
     # Adds geoms, color palette and faceting
     if(input$pairPlot == TRUE) {
-      p = p + facet_wrap(~Description)
-
+      p = p + facet_wrap(~get(fill)) + theme(panel.spacing.y = unit(2, "lines"), 
+                                             axis.text.x = element_text(size = 5),
+                                             axis.text.y = element_text(size = 5))
       if(input$plotType == "Histogram"){
-        p = p + geom_col(position = "dodge", color = "black", fill = "#56B4E9")
+        p = p + geom_col(position = "dodge", color = "white", fill = "#00718f") 
 
       }
       else if(input$plotType == "linePlot") {
-        p = p + geom_line(group = 1, color = "#56B4E9")
-        p = p + geom_point(group = 1, color = "black", fill = "#56B4E9")
+        p = p + geom_line(group = 1, color = "#00718f") + theme(legend.position = "none")
+        p = p + geom_point(group = 1, color = "#00718f", fill = "#00718f")
 
       }
       else if(input$plotType == "smoothPlot") {
-        p = p + geom_smooth(colour = "#56B4E9", aes(group = Description), se = FALSE, span = 0.5)
+        p = p + geom_smooth(colour = "#00718f", aes(group = get(fill)), se = FALSE, span = 0.5) + theme(legend.position = "none")
 
       }
     } else {
       if(input$plotType == "Histogram"){
-        p = p + geom_col(position = "dodge", colour = "black")
+        p = p + geom_col(position = "dodge", colour = "white")
         p = p + scale_fill_manual(values = cbPalette)
       }
       else if(input$plotType == "linePlot") {
-        p = p + geom_line(aes(color = Description), group = 1)
-        p = p + geom_point(aes(color = Description), group = 1)
+        p = p + geom_line(aes(color = get(fill)), group = 1)
+        p = p + geom_point(aes(color = get(fill)), group = 1)
         p = p + scale_colour_manual(values = cbPalette)
       }
       else if(input$plotType == "smoothPlot") {
-        p = p + geom_smooth(aes(color = Description, group = Description), se = FALSE, span = 0.5)
+        p = p + geom_smooth(aes(color = get(fill), group = get(fill)), se = FALSE, span = 0.5)
         p = p + scale_colour_manual(values = cbPalette)
       }
     }
 
-    p$labels$fill = "Subgroups"
+    p = p + labs(fill = label, color = NULL)
 
     p %>%
       ggplotly() %>% config(modeBarButtons = list(list("toImage")))
@@ -446,25 +583,49 @@ server <- function(input, output, session) {
   ################################
   output$incomeBandPlot = renderPlotly({
 
-
-    dataset= copy(dataUpload())
-
-    dataset = dataset[Population=="S", Population := 0L]
-    dataset = dataset[,Population := as.numeric(Population)]
-
-    if(length(input$show_groups) > 8){
+    if(length(show_groups()) > 8){
       return(NULL)
     }
-
-    if (input$populationType == 'Household'){
-      incomeBand = dataset[Income.Type == "Income Bands" & Population.Type == input$populationType & Description %in% input$show_groups
-                           & Income.Measure == income_sort()]
+    
+    if(length(input$chosen_years) > 8){
+      return(NULL)
+    }
+    
+    if(length(input$chosen_file) > 1){
+      fill <- "file"
+      label <- "Years"
+      subtitle <- str_to_title(show_groups())
+    }
+    else {
+      fill <- "Description"
+      label <- "Subgroups"
+      subtitle <- paste0("Tax Year 20", data_year(), " from ", data_version())
+    }
+    
+    if(input$pairPlot) {
+      x_label <- NULL
+    }
+    else {
+      x_label <- "Income Bands"
+    }
+    
+    dataset= copy(dataUpload())
+    
+    if(input$normalised) {
+      pop_type <- "Normalised"
+      dataset = dataset[Normalised=="S", Normalised := 0L]
+      dataset = dataset[,Normalised := as.numeric(Normalised)]
+      y_label <- "Normalised Population"
+    }
+    else {
+      pop_type <- "Population"
+      dataset = dataset[Population=="S", Population := 0L]
+      dataset = dataset[,Population := as.numeric(Population)]
+      y_label <- "Population"
     }
 
-    if (input$populationType == 'Family'){
-      incomeBand = dataset[Income.Type == "Income Bands" & Population.Type == input$populationType & Description %in% input$show_groups2
-                           & Income.Measure == income_sort()]
-    }
+    incomeBand = dataset[Income.Type == "Income Bands" & Population.Type == input$populationType & Description %in% show_groups()
+                         & Income.Measure == income_sort()]
 
     incomeBand[, Band := as.factor(Income.Group)]
 
@@ -481,9 +642,9 @@ server <- function(input, output, session) {
                                    "$240k-$260k", "$260k-$280k", "$280k-$300k", "Above $300k"))
     }
 
-    p = ggplot(incomeBand, aes(x = Band, y=Population, fill=Description)) +
-      labs(title = paste0(str_to_title(paste("Population Distribution By", input$populationType, income_sort(), "Bands", sep = " ")), "\nTax Year 20", data_year(), " from ", data_hes(), " and ", data_efu()),
-           x = "Income Bands", y = "Population") +
+    p = ggplot(incomeBand, aes(x = Band, y=get(pop_type), fill=get(fill))) +
+      labs(title = paste0(str_to_title(paste("Population Distribution By", input$populationType, income_sort(), "Bands", sep = " ")), "\n", subtitle),
+           x = x_label, y = y_label) +
       scale_y_continuous(labels = comma, limits = c(0, NA),
                          expand = expansion(mult = c(0, 0.05))) +  # Includes 0 in y axis and has the top of graph 5% above the max value
       theme_classic() +
@@ -491,42 +652,49 @@ server <- function(input, output, session) {
             axis.text.x = element_text(angle = 45, vjust = 0.5, size = 8),
             axis.text.y = element_text(size = 8),
             axis.title = element_text(size = 10),
-            legend.title.align = 0.5)
+            legend.title.align = 0.5,
+            plot.margin = margin(t = 40),
+            strip.background =element_rect(fill="#00718f", color = "#00718f"),
+            strip.text = element_text(colour = 'white'))
 
     # Adds geoms, color palette and faceting
     if(input$pairPlot == TRUE) {
-      p = p + facet_wrap(~Description)
+      p = p + facet_wrap(~get(fill)) + theme(panel.spacing.y = unit(2, "lines"),  
+                                             axis.text.x = element_text(size = 5),
+                                             axis.text.y = element_text(size = 5))
 
       if(input$plotType == "Histogram"){
-        p = p + geom_col(position = "dodge", color = "black", fill = "#56B4E9")
+        p = p + geom_col(position = "dodge", color = "white", fill = "#00718f")
 
       }
       else if(input$plotType == "linePlot") {
-        p = p + geom_line(group = 1, color = "#56B4E9")
-        p = p + geom_point(group = 1, color = "black", fill = "#56B4E9")
+        p = p + geom_line(group = 1, color = "#00718f") + theme(legend.position = "none")
+        p = p + geom_point(group = 1, color = "#00718f", fill = "#00718f")
 
       }
       else if(input$plotType == "smoothPlot") {
-        p = p + geom_smooth(colour = "#56B4E9", aes(group = Description), se = FALSE, span = 0.5)
+        p = p + geom_smooth(colour = "#00718f", aes(group = get(fill)), se = FALSE, span = 0.5) + theme(legend.position = "none")
 
       }
+      
+      
     } else {
       if(input$plotType == "Histogram"){
-        p = p + geom_col(position = "dodge", colour = "black")
+        p = p + geom_col(position = "dodge", colour = "white")
         p = p + scale_fill_manual(values = cbPalette)
       }
       else if(input$plotType == "linePlot") {
-        p = p + geom_line(aes(color = Description), group = 1)
-        p = p + geom_point(aes(color = Description), group = 1)
+        p = p + geom_line(aes(color = get(fill)), group = 1)
+        p = p + geom_point(aes(color = get(fill)), group = 1)
         p = p + scale_colour_manual(values = cbPalette)
       }
       else if(input$plotType == "smoothPlot") {
-        p = p + geom_smooth(aes(color = Description, group = Description), se = FALSE, span = 0.5)
+        p = p + geom_smooth(aes(color = get(fill), group = get(fill)), se = FALSE, span = 0.5)
         p = p + scale_colour_manual(values = cbPalette)
       }
     }
 
-    p$labels$fill = "Subgroups"
+    p = p + labs(fill = label, color = NULL)
 
     p %>%
       ggplotly() %>% config(modeBarButtons = list(list("toImage")))
@@ -539,21 +707,28 @@ server <- function(input, output, session) {
 
   # Creates table
   ventileTable = reactive ({
+    
 
+    dataset = copy(dataUpload())
 
-    dataset = dataUpload()
+    ventiles = dataset[Income.Type == "Income Quantiles" & Population.Type == input$populationType & Description %in% show_groups()
+                       & Income.Measure == income_sort() & file %in% data_version_full()]
 
-    if (input$populationType == 'Family'){
-      ventiles = dataset[Income.Type == "Income Quantiles" & Population.Type == input$populationType & Description %in% input$show_groups2
-                         & Income.Measure == income_sort()]
-
-    } else {
-      ventiles = dataset[Income.Type == "Income Quantiles" & Population.Type == input$populationType & Description %in% input$show_groups
-                         & Income.Measure == income_sort()]
+    ventiles[, c("Index", "Income.Type", "Value", "file") := NULL]
+    
+    if (length(input$chosen_file) == 1) {
+      ventiles[, c("data_version", "year", "Normalised") := NULL]
+      colnames(ventiles) = c("Ventile", "Population Type", "Population Subgroup", "Income Type", "Population Value")
     }
-
-    ventiles[, c("Index", "Income.Type", "Value") := NULL]
-    colnames(ventiles) = c("Ventile", "Population Type", "Population Subgroup", "Income Type", "Population Value")
+    else if (input$normalised) {
+      ventiles[, c("Population") := NULL]
+      colnames(ventiles) = c("Ventile", "Population Type", "Population Subgroup", "Income Type", "Version", "Year", "Normalised Population Value")
+    }
+    else {
+      ventiles[, c("Normalised") := NULL]
+      colnames(ventiles) = c("Ventile", "Population Type", "Population Subgroup", "Income Type", "Population Value", "Version", "Year")
+      setcolorder(ventiles, c("Ventile", "Population Type", "Population Subgroup", "Income Type", "Version", "Year", "Population Value"))
+    }
 
     return(ventiles)
 
@@ -561,11 +736,15 @@ server <- function(input, output, session) {
 
   #Displays table
   output$ventileTable = renderDataTable({
+    
+    
     datatable(ventileTable(), rownames = FALSE)
   })
 
   # Download handler
   output$downloadData1 <- downloadHandler(
+    
+    
     filename = function() {
       paste("ventileData", Sys.Date(), "csv", sep = ".")
     },
@@ -580,7 +759,12 @@ server <- function(input, output, session) {
   })
 
   output$ventileDataSubTitle = renderText({
-    paste0("Tax Year 20", data_year(), " from ", data_hes(), " and ", data_efu())
+    if(length(input$chosen_file) > 1){
+      str_to_title(show_groups())
+    }
+    else {
+      paste0("Tax Year 20", data_year(), " from ", data_version())
+    }
   })
 
   ################################
@@ -589,29 +773,39 @@ server <- function(input, output, session) {
 
   # Creates table
   incomeBandTable = reactive ({
+    
 
+    dataset = copy(dataUpload())
 
-    dataset = dataUpload()
+    incomeBand = dataset[Income.Type == "Income Bands" & Population.Type == input$populationType & Description %in% show_groups()
+                         & Income.Measure == income_sort() & file %in% data_version_full()]
 
-    if (input$populationType == 'Household'){
-      incomeBand = dataset[Income.Type == "Income Bands" & Population.Type == input$populationType & Description %in% input$show_groups
-                           & Income.Measure == income_sort()]
+    incomeBand[, c("Index", "Income.Type", "Value", "file") := NULL]
+    
+    if (length(input$chosen_file) == 1) {
+      incomeBand[, c("data_version", "year", "Normalised") := NULL]
+      colnames(incomeBand) = c("Income Band", "Population Type", "Population Subgroup", "Income Type", "Population Value")
     }
-
-    if (input$populationType == 'Family'){
-      incomeBand = dataset[Income.Type == "Income Bands" & Population.Type == input$populationType & Description %in% input$show_groups2
-                           & Income.Measure == income_sort()]
+    else if (input$normalised) {
+      incomeBand[, c("Population") := NULL]
+      incomeBand[Normalised != "S", Normalised := round(as.numeric(Normalised))]
+      colnames(incomeBand) = c("Income Band", "Population Type", "Population Subgroup", "Income Type", "Version", "Year", "Normalised Population Value")
+      
     }
-
-    incomeBand[, c("Index", "Income.Type", "Value") := NULL]
-    colnames(incomeBand) = c("Income Band", "Population Type", "Population Subgroup", "Income Type", "Population Value")
-
+    else {
+      incomeBand[, c("Normalised") := NULL]
+      colnames(incomeBand) = c("Income Band", "Population Type", "Population Subgroup", "Income Type", "Population Value", "Version", "Year")
+      setcolorder(incomeBand, c("Income Band", "Population Type", "Population Subgroup", "Income Type", "Version", "Year", "Population Value"))
+    }
+    
     return(incomeBand)
   }
   )
 
   # Displays table
   output$incomeBandTable = renderDataTable({
+    
+    
     datatable(incomeBandTable(), rownames = FALSE)
   })
 
@@ -619,6 +813,8 @@ server <- function(input, output, session) {
 
   # Download handler
   output$downloadData2 <- downloadHandler(
+    
+    
     filename = function() {
       paste("incomeBandData", Sys.Date(), "csv", sep = ".")
     },
@@ -629,11 +825,18 @@ server <- function(input, output, session) {
 
   # Table title
   output$incomeBandDataTitle = renderText({
+    
     str_to_title(paste("Population Distribution By", input$populationType, income_sort(), "Bands", sep = " "))
   })
 
   output$incomeBandDataSubTitle = renderText({
-    paste0("Tax Year 20", data_year(), " from ", data_hes(), " and ", data_efu())
+    
+    if(length(input$chosen_file) > 1){
+      str_to_title(show_groups())
+    }
+    else {
+    paste0("Tax Year 20", data_year(), " from ", data_version())
+    }
   })
 }
 
